@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/remove_target_root"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="8dp">
+
+    <FrameLayout
+        android:id="@+id/remove_target_circle"
+        android:layout_width="60dp"
+        android:layout_height="60dp"
+        android:background="@drawable/bg_remove_target"
+        android:elevation="12dp">
+
+        <ImageView
+            android:id="@+id/remove_target_icon"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_lucide_x"
+            android:tint="#F8FAFC"
+            android:contentDescription="Close Drop Zone" />
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/tv_remove_hint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Tarik ke sini untuk menutup"
+        android:textColor="#CBD5E1"
+        android:textSize="11sp"
+        android:layout_marginTop="4dp"
+        android:shadowColor="#000000"
+        android:shadowDx="0"
+        android:shadowDy="1"
+        android:shadowRadius="2" />
+
+</LinearLayout>

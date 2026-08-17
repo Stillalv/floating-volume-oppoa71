@@ -5,73 +5,132 @@
     android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:padding="4dp">
+    android:padding="6dp">
 
-    <!-- Tombol Lingkaran Utama (Bubble) -->
+    <!-- Tombol Lingkaran Utama (Bubble Lucide Volume) -->
     <FrameLayout
         android:id="@+id/bubble_wrapper"
-        android:layout_width="56dp"
-        android:layout_height="56dp"
-        android:background="@drawable/bg_floating_bubble"
-        android:elevation="8dp">
+        android:layout_width="54dp"
+        android:layout_height="54dp"
+        android:background="@drawable/bg_bubble_glass"
+        android:clickable="true"
+        android:focusable="true"
+        android:elevation="10dp">
 
         <ImageView
             android:id="@+id/icon_main_bubble"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+            android:layout_width="26dp"
+            android:layout_height="26dp"
             android:layout_gravity="center"
-            android:src="@android:drawable/ic_lock_silent_mode_off"
+            android:src="@drawable/ic_lucide_volume_2"
+            android:tint="#FFFFFF"
             android:contentDescription="Volume Bubble" />
     </FrameLayout>
 
-    <!-- Menu Melayang yang bisa di-expand jika ditekan -->
+    <!-- Menu Expanded Melayang Pill Bar -->
     <LinearLayout
         android:id="@+id/layout_expanded_menu"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_height="54dp"
         android:layout_marginStart="8dp"
-        android:background="@drawable/bg_floating_menu"
+        android:background="@drawable/bg_expanded_bar"
         android:orientation="horizontal"
-        android:padding="6dp"
-        android:gravity="center"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:gravity="center_vertical"
         android:visibility="gone"
-        android:elevation="8dp">
+        android:elevation="10dp">
 
-        <!-- Tombol Volume + -->
-        <ImageView
-            android:id="@+id/btn_volume_up"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:padding="8dp"
-            android:src="@android:drawable/arrow_up_float"
-            android:contentDescription="Volume Up" />
+        <!-- Tombol Mute / Unmute -->
+        <FrameLayout
+            android:id="@+id/btn_mute_toggle"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:background="@drawable/bg_btn_action">
+            <ImageView
+                android:id="@+id/icon_mute"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_lucide_volume_x"
+                android:tint="#EF4444"
+                android:contentDescription="Mute / Unmute" />
+        </FrameLayout>
 
         <!-- Tombol Volume - -->
-        <ImageView
+        <FrameLayout
             android:id="@+id/btn_volume_down"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:padding="8dp"
-            android:src="@android:drawable/arrow_down_float"
-            android:contentDescription="Volume Down" />
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:layout_marginStart="4dp"
+            android:background="@drawable/bg_btn_action">
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_lucide_minus"
+                android:tint="#F8FAFC"
+                android:contentDescription="Volume Down" />
+        </FrameLayout>
 
-        <!-- Tombol Slider Bawaan -->
-        <ImageView
+        <!-- Level Volume Text (%) -->
+        <TextView
+            android:id="@+id/tv_volume_level"
+            android:layout_width="42dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="70%"
+            android:textColor="#38BDF8"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <!-- Tombol Volume + -->
+        <FrameLayout
+            android:id="@+id/btn_volume_up"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/bg_btn_action">
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_lucide_plus"
+                android:tint="#F8FAFC"
+                android:contentDescription="Volume Up" />
+        </FrameLayout>
+
+        <!-- Tombol Slider Bawaan OS -->
+        <FrameLayout
             android:id="@+id/btn_show_slider"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:padding="8dp"
-            android:src="@android:drawable/ic_menu_sort_by_size"
-            android:contentDescription="Show Full Slider" />
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/bg_btn_action">
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_lucide_sliders"
+                android:tint="#38BDF8"
+                android:contentDescription="Show Full Slider" />
+        </FrameLayout>
 
-        <!-- Tombol Tutup Mini Menu -->
-        <ImageView
+        <!-- Tombol Close Menu -->
+        <FrameLayout
             android:id="@+id/btn_close_menu"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:padding="8dp"
-            android:src="@android:drawable/ic_menu_close_clear_cancel"
-            android:contentDescription="Close Menu" />
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:background="@drawable/bg_btn_action">
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_lucide_x"
+                android:tint="#94A3B8"
+                android:contentDescription="Close Menu" />
+        </FrameLayout>
+
     </LinearLayout>
 
 </LinearLayout>

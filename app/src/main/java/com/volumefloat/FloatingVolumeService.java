@@ -1,5 +1,6 @@
 package com.volumefloat;
 
+import android.animation.ValueAnimator;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -10,13 +11,18 @@ import android.graphics.PixelFormat;
 import android.media.AudioManager;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
+import android.util.DisplayMetrics;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 import androidx.core.app.NotificationCompat;
 
@@ -24,16 +30,30 @@ public class FloatingVolumeService extends Service {
 
     private WindowManager mWindowManager;
     private View mFloatingWidget;
-    private WindowManager.LayoutParams params;
-    private AudioManager audioManager;
+    private WindowManager.LayoutParams paramsWidget;
 
-    private ImageView iconMain;
+    private View mRemoveTargetView;
+    private WindowManager.LayoutParams paramsRemoveTarget;
+    private FrameLayout removeCircle;
+
+    private AudioManager audioManager;
+    private Vibrator vibrator;
+
+    private FrameLayout bubbleWrapper;
+    private ImageView iconMainBubble;
     private LinearLayout menuExpanded;
-    private ImageView btnVolUp, btnVolDown, btnShowSlider, btnClose;
+    private FrameLayout btnMuteToggle, btnVolDown, btnVolUp, btnShowSlider, btnCloseMenu;
+    private ImageView iconMute;
+    private TextView tvVolumeLevel;
+
     private boolean isExpanded = false;
+    private boolean isOverRemoveTarget = false;
+    private int screenWidth = 0;
+    private int screenHeight = 0;
 
     private static final String CHANNEL_ID = "FloatingVolumeChannel";
     private static final int NOTIFICATION_ID = 101;
+    public static boolean isRunning = false;
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -43,115 +63,225 @@ public class FloatingVolumeService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        isRunning = true;
 
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+        mWindowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+
+        calculateScreenDimensions();
+
+        // 1. Inisialisasi Floating Widget
+        initFloatingWidget();
+
+        // 2. Inisialisasi Drop Target 'X' di Bawah
+        initRemoveTargetView();
+
+        // 3. Setup Touch & Drag Listener
+        setupTouchAndDrag();
+
+        // 4. Jalankan sebagai Foreground Service
+        startAsForegroundService();
+    }
+
+    private void calculateScreenDimensions() {
+        DisplayMetrics metrics = new DisplayMetrics();
+        mWindowManager.getDefaultDisplay().getMetrics(metrics);
+        screenWidth = metrics.widthPixels;
+        screenHeight = metrics.heightPixels;
+    }
+
+    private int getOverlayWindowType() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            return WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+        } else {
+            return WindowManager.LayoutParams.TYPE_PHONE;
+        }
+    }
+
+    private void initFloatingWidget() {
         mFloatingWidget = LayoutInflater.from(this).inflate(R.layout.floating_widget_layout, null);
 
-        // Kompatibilitas Window Type untuk Android 7.1 (Oppo A71) dan versi lebih baru
-        int layoutFlag;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            layoutFlag = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
-        } else {
-            layoutFlag = WindowManager.LayoutParams.TYPE_PHONE;
-        }
-
-        params = new WindowManager.LayoutParams(
+        paramsWidget = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
-                layoutFlag,
+                getOverlayWindowType(),
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT
         );
 
-        params.gravity = Gravity.TOP | Gravity.START;
-        params.x = 20;
-        params.y = 200;
+        paramsWidget.gravity = Gravity.TOP | Gravity.START;
+        paramsWidget.x = 24;
+        paramsWidget.y = screenHeight / 3;
 
-        mWindowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-        if (mWindowManager != null) {
-            mWindowManager.addView(mFloatingWidget, params);
-        }
+        mWindowManager.addView(mFloatingWidget, paramsWidget);
 
-        initViews();
-        setupTouchListener();
-        startAsForegroundService();
-    }
-
-    private void initViews() {
-        iconMain = mFloatingWidget.findViewById(R.id.icon_main_bubble);
+        bubbleWrapper = mFloatingWidget.findViewById(R.id.bubble_wrapper);
+        iconMainBubble = mFloatingWidget.findViewById(R.id.icon_main_bubble);
         menuExpanded = mFloatingWidget.findViewById(R.id.layout_expanded_menu);
-        btnVolUp = mFloatingWidget.findViewById(R.id.btn_volume_up);
-        btnVolDown = mFloatingWidget.findViewById(R.id.btn_volume_down);
-        btnShowSlider = mFloatingWidget.findViewById(R.id.btn_show_slider);
-        btnClose = mFloatingWidget.findViewById(R.id.btn_close_menu);
 
-        // Volume Up (+)
-        btnVolUp.setOnClickListener(v -> {
+        btnMuteToggle = mFloatingWidget.findViewById(R.id.btn_mute_toggle);
+        iconMute = mFloatingWidget.findViewById(R.id.icon_mute);
+        btnVolDown = mFloatingWidget.findViewById(R.id.btn_volume_down);
+        tvVolumeLevel = mFloatingWidget.findViewById(R.id.tv_volume_level);
+        btnVolUp = mFloatingWidget.findViewById(R.id.btn_volume_up);
+        btnShowSlider = mFloatingWidget.findViewById(R.id.btn_show_slider);
+        btnCloseMenu = mFloatingWidget.findViewById(R.id.btn_close_menu);
+
+        updateVolumeDisplay();
+
+        // Tombol Mute / Unmute
+        btnMuteToggle.setOnClickListener(v -> {
+            triggerHaptic();
             if (audioManager != null) {
-                audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI);
+                int currentVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
+                if (currentVol > 0) {
+                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, AudioManager.FLAG_SHOW_UI);
+                } else {
+                    int maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, maxVol / 2, AudioManager.FLAG_SHOW_UI);
+                }
+                updateVolumeDisplay();
             }
         });
 
-        // Volume Down (-)
+        // Tombol Volume -
         btnVolDown.setOnClickListener(v -> {
+            triggerHaptic();
             if (audioManager != null) {
                 audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI);
+                updateVolumeDisplay();
             }
         });
 
-        // Tampilkan Slider Bawaan Android
+        // Tombol Volume +
+        btnVolUp.setOnClickListener(v -> {
+            triggerHaptic();
+            if (audioManager != null) {
+                audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI);
+                updateVolumeDisplay();
+            }
+        });
+
+        // Tombol Show Full Slider
         btnShowSlider.setOnClickListener(v -> {
+            triggerHaptic();
             if (audioManager != null) {
                 audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_SAME, AudioManager.FLAG_SHOW_UI);
             }
         });
 
-        // Tutup expand menu
-        btnClose.setOnClickListener(v -> toggleMenu(false));
+        // Tombol Close Menu
+        btnCloseMenu.setOnClickListener(v -> toggleMenu(false));
+    }
+
+    private void initRemoveTargetView() {
+        mRemoveTargetView = LayoutInflater.from(this).inflate(R.layout.floating_remove_target_layout, null);
+        removeCircle = mRemoveTargetView.findViewById(R.id.remove_target_circle);
+
+        paramsRemoveTarget = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                getOverlayWindowType(),
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                PixelFormat.TRANSLUCENT
+        );
+
+        paramsRemoveTarget.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        paramsRemoveTarget.y = 80;
+
+        mRemoveTargetView.setVisibility(View.GONE);
+        mWindowManager.addView(mRemoveTargetView, paramsRemoveTarget);
+    }
+
+    private void updateVolumeDisplay() {
+        if (audioManager == null || tvVolumeLevel == null) return;
+        int max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+        int current = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
+        int percent = (int) (((float) current / max) * 100);
+        tvVolumeLevel.setText(percent + "%");
+
+        if (current == 0) {
+            iconMute.setImageResource(R.drawable.ic_lucide_volume_2);
+            iconMute.setColorFilter(0xFF10B981); // Green
+        } else {
+            iconMute.setImageResource(R.drawable.ic_lucide_volume_x);
+            iconMute.setColorFilter(0xFFEF4444); // Red
+        }
     }
 
     private void toggleMenu(boolean expand) {
         isExpanded = expand;
         if (isExpanded) {
+            updateVolumeDisplay();
             menuExpanded.setVisibility(View.VISIBLE);
         } else {
             menuExpanded.setVisibility(View.GONE);
         }
     }
 
-    private void setupTouchListener() {
-        mFloatingWidget.findViewById(R.id.root_container).setOnTouchListener(new View.OnTouchListener() {
+    private void setupTouchAndDrag() {
+        bubbleWrapper.setOnTouchListener(new View.OnTouchListener() {
             private int initialX;
             private int initialY;
             private float initialTouchX;
             private float initialTouchY;
-            private static final int CLICK_ACTION_THRESHOLD = 15;
+            private boolean isDragging = false;
+            private static final int CLICK_THRESHOLD = 15;
 
             @Override
             public boolean onTouch(View v, MotionEvent event) {
                 switch (event.getAction()) {
                     case MotionEvent.ACTION_DOWN:
-                        initialX = params.x;
-                        initialY = params.y;
+                        initialX = paramsWidget.x;
+                        initialY = paramsWidget.y;
                         initialTouchX = event.getRawX();
                         initialTouchY = event.getRawY();
+                        isDragging = false;
+                        isOverRemoveTarget = false;
                         return true;
 
                     case MotionEvent.ACTION_MOVE:
-                        params.x = initialX + (int) (event.getRawX() - initialTouchX);
-                        params.y = initialY + (int) (event.getRawY() - initialTouchY);
-                        if (mWindowManager != null) {
-                            mWindowManager.updateViewLayout(mFloatingWidget, params);
+                        int dx = (int) (event.getRawX() - initialTouchX);
+                        int dy = (int) (event.getRawY() - initialTouchY);
+
+                        if (Math.abs(dx) > CLICK_THRESHOLD || Math.abs(dy) > CLICK_THRESHOLD) {
+                            if (!isDragging) {
+                                isDragging = true;
+                                mRemoveTargetView.setVisibility(View.VISIBLE);
+                                if (isExpanded) toggleMenu(false);
+                            }
+
+                            paramsWidget.x = initialX + dx;
+                            paramsWidget.y = initialY + dy;
+                            mWindowManager.updateViewLayout(mFloatingWidget, paramsWidget);
+
+                            // Cek apakah posisi bubble berada di area target 'X' bawah
+                            checkRemoveTargetCollision(event.getRawX(), event.getRawY());
                         }
                         return true;
 
                     case MotionEvent.ACTION_UP:
-                        float deltaX = Math.abs(event.getRawX() - initialTouchX);
-                        float deltaY = Math.abs(event.getRawY() - initialTouchY);
+                        mRemoveTargetView.setVisibility(View.GONE);
 
-                        // Deteksi Sekali Tekan (Single Tap)
-                        if (deltaX < CLICK_ACTION_THRESHOLD && deltaY < CLICK_ACTION_THRESHOLD) {
-                            onBubbleSingleClick();
+                        if (isDragging) {
+                            if (isOverRemoveTarget) {
+                                // USER MENJATUHKAN KE TARGET 'X' -> TUTUP/HAPUS WIDGET
+                                triggerHapticLong();
+                                Toast.makeText(FloatingVolumeService.this, "Widget volume dinonaktifkan", Toast.LENGTH_SHORT).show();
+                                stopSelf();
+                                return true;
+                            } else {
+                                // Auto Snap ke sisi layar terdekat (kiri atau kanan)
+                                snapToEdge();
+                            }
+                        } else {
+                            // SINGLE TAP: Munculkan Slider & Toggle Mini Menu
+                            triggerHaptic();
+                            if (audioManager != null) {
+                                audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_SAME, AudioManager.FLAG_SHOW_UI);
+                            }
+                            toggleMenu(!isExpanded);
                         }
                         return true;
                 }
@@ -160,17 +290,55 @@ public class FloatingVolumeService extends Service {
         });
     }
 
-    // Aksi ketika tombol bulat ditekan sekali
-    private void onBubbleSingleClick() {
-        if (!isExpanded) {
-            // LANGSUNG MUNCULKAN SLIDER VOLUME BAWAAN SISTEM DI LAYAR
-            if (audioManager != null) {
-                audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_SAME, AudioManager.FLAG_SHOW_UI);
+    private void checkRemoveTargetCollision(float rawX, float rawY) {
+        int targetYThreshold = screenHeight - 260;
+        int targetXCenter = screenWidth / 2;
+        int targetXThreshold = 180;
+
+        if (rawY > targetYThreshold && Math.abs(rawX - targetXCenter) < targetXThreshold) {
+            if (!isOverRemoveTarget) {
+                isOverRemoveTarget = true;
+                removeCircle.setBackgroundResource(R.drawable.bg_remove_target_active);
+                triggerHaptic();
             }
-            // Munculkan opsi expand mini
-            toggleMenu(true);
         } else {
-            toggleMenu(false);
+            if (isOverRemoveTarget) {
+                isOverRemoveTarget = false;
+                removeCircle.setBackgroundResource(R.drawable.bg_remove_target);
+            }
+        }
+    }
+
+    private void snapToEdge() {
+        int midX = screenWidth / 2;
+        int targetX = (paramsWidget.x >= midX) ? (screenWidth - bubbleWrapper.getWidth() - 20) : 20;
+
+        ValueAnimator animator = ValueAnimator.ofInt(paramsWidget.x, targetX);
+        animator.setDuration(220);
+        animator.addUpdateListener(animation -> {
+            paramsWidget.x = (int) animation.getAnimatedValue();
+            if (mFloatingWidget != null && mWindowManager != null) {
+                mWindowManager.updateViewLayout(mFloatingWidget, paramsWidget);
+            }
+        });
+        animator.start();
+    }
+
+    private void triggerHaptic() {
+        if (vibrator == null) return;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator.vibrate(VibrationEffect.createOneShot(25, VibrationEffect.DEFAULT_AMPLITUDE));
+        } else {
+            vibrator.vibrate(25);
+        }
+    }
+
+    private void triggerHapticLong() {
+        if (vibrator == null) return;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator.vibrate(VibrationEffect.createOneShot(70, VibrationEffect.DEFAULT_AMPLITUDE));
+        } else {
+            vibrator.vibrate(70);
         }
     }
 
@@ -188,9 +356,9 @@ public class FloatingVolumeService extends Service {
         }
 
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("Floating Volume Active")
-                .setContentText("Sentuh bubble untuk atur volume HP")
-                .setSmallIcon(android.R.drawable.ic_lock_silent_mode_off)
+                .setContentTitle("Floating Volume Aktif")
+                .setContentText("Tap bubble untuk kontrol volume, atau tahan & tarik ke X untuk tutup")
+                .setSmallIcon(R.drawable.ic_lucide_volume_2)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .build();
 
@@ -200,8 +368,12 @@ public class FloatingVolumeService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
+        isRunning = false;
         if (mFloatingWidget != null && mWindowManager != null) {
             mWindowManager.removeView(mFloatingWidget);
+        }
+        if (mRemoveTargetView != null && mWindowManager != null) {
+            mWindowManager.removeView(mRemoveTargetView);
         }
     }
 }
