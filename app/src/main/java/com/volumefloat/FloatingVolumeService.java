@@ -130,40 +130,40 @@ public class FloatingVolumeService extends Service {
 
         updateVolumeDisplay();
 
+        // Tombol Volume Turun (-)
+        btnVolDown.setOnClickListener(v -> {
+            triggerHaptic();
+            if (audioManager != null) {
+                audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, 0);
+                updateVolumeDisplay();
+            }
+        });
+
+        // Tombol Volume Naik (+)
+        btnVolUp.setOnClickListener(v -> {
+            triggerHaptic();
+            if (audioManager != null) {
+                audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, 0);
+                updateVolumeDisplay();
+            }
+        });
+
         // Tombol Mute / Unmute
         btnMuteToggle.setOnClickListener(v -> {
             triggerHaptic();
             if (audioManager != null) {
                 int currentVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
                 if (currentVol > 0) {
-                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, AudioManager.FLAG_SHOW_UI);
+                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0);
                 } else {
                     int maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
-                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, maxVol / 2, AudioManager.FLAG_SHOW_UI);
+                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, Math.max(1, maxVol / 2), 0);
                 }
                 updateVolumeDisplay();
             }
         });
 
-        // Tombol Volume -
-        btnVolDown.setOnClickListener(v -> {
-            triggerHaptic();
-            if (audioManager != null) {
-                audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI);
-                updateVolumeDisplay();
-            }
-        });
-
-        // Tombol Volume +
-        btnVolUp.setOnClickListener(v -> {
-            triggerHaptic();
-            if (audioManager != null) {
-                audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI);
-                updateVolumeDisplay();
-            }
-        });
-
-        // Tombol Show Full Slider
+        // Tombol Show Full Native Slider
         btnShowSlider.setOnClickListener(v -> {
             triggerHaptic();
             if (audioManager != null) {
@@ -171,8 +171,11 @@ public class FloatingVolumeService extends Service {
             }
         });
 
-        // Tombol Close Menu
-        btnCloseMenu.setOnClickListener(v -> toggleMenu(false));
+        // Tombol Tutup Mini Menu
+        btnCloseMenu.setOnClickListener(v -> {
+            triggerHaptic();
+            toggleMenu(false);
+        });
     }
 
     private void initRemoveTargetView() {
@@ -198,15 +201,15 @@ public class FloatingVolumeService extends Service {
         if (audioManager == null || tvVolumeLevel == null) return;
         int max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
         int current = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
-        int percent = (int) (((float) current / max) * 100);
+        int percent = (int) (((float) current / Math.max(1, max)) * 100);
         tvVolumeLevel.setText(percent + "%");
 
         if (current == 0) {
             iconMute.setImageResource(R.drawable.ic_lucide_volume_2);
-            iconMute.setColorFilter(0xFF10B981); // Green
+            iconMute.setColorFilter(0xFF10B981); // Hijau untuk unmute
         } else {
             iconMute.setImageResource(R.drawable.ic_lucide_volume_x);
-            iconMute.setColorFilter(0xFFEF4444); // Red
+            iconMute.setColorFilter(0xFFEF4444); // Merah untuk mute
         }
     }
 
@@ -215,8 +218,28 @@ public class FloatingVolumeService extends Service {
         if (isExpanded) {
             updateVolumeDisplay();
             menuExpanded.setVisibility(View.VISIBLE);
+
+            // Hitung lebar total agar tidak off-screen ke kanan
+            mFloatingWidget.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+            int widgetWidth = mFloatingWidget.getMeasuredWidth();
+            if (widgetWidth == 0) widgetWidth = 600; // fallback approx px
+
+            if (paramsWidget.x + widgetWidth > screenWidth - 24) {
+                paramsWidget.x = Math.max(24, screenWidth - widgetWidth - 24);
+            }
+            if (paramsWidget.x < 24) {
+                paramsWidget.x = 24;
+            }
+
+            if (mWindowManager != null && mFloatingWidget != null) {
+                mWindowManager.updateViewLayout(mFloatingWidget, paramsWidget);
+            }
         } else {
             menuExpanded.setVisibility(View.GONE);
+            if (mWindowManager != null && mFloatingWidget != null) {
+                mWindowManager.updateViewLayout(mFloatingWidget, paramsWidget);
+            }
+            snapToEdge();
         }
     }
 
@@ -226,13 +249,16 @@ public class FloatingVolumeService extends Service {
             private int initialY;
             private float initialTouchX;
             private float initialTouchY;
+            private long touchStartTime = 0;
             private boolean isDragging = false;
-            private static final int CLICK_THRESHOLD = 15;
+            private static final int CLICK_MAX_DURATION = 350; // ms
+            private static final int CLICK_MAX_DISTANCE = 25; // px
 
             @Override
             public boolean onTouch(View v, MotionEvent event) {
                 switch (event.getAction()) {
                     case MotionEvent.ACTION_DOWN:
+                        touchStartTime = System.currentTimeMillis();
                         initialX = paramsWidget.x;
                         initialY = paramsWidget.y;
                         initialTouchX = event.getRawX();
@@ -242,45 +268,46 @@ public class FloatingVolumeService extends Service {
                         return true;
 
                     case MotionEvent.ACTION_MOVE:
-                        int dx = (int) (event.getRawX() - initialTouchX);
-                        int dy = (int) (event.getRawY() - initialTouchY);
+                        float dx = event.getRawX() - initialTouchX;
+                        float dy = event.getRawY() - initialTouchY;
 
-                        if (Math.abs(dx) > CLICK_THRESHOLD || Math.abs(dy) > CLICK_THRESHOLD) {
+                        if (Math.abs(dx) > CLICK_MAX_DISTANCE || Math.abs(dy) > CLICK_MAX_DISTANCE) {
                             if (!isDragging) {
                                 isDragging = true;
                                 mRemoveTargetView.setVisibility(View.VISIBLE);
-                                if (isExpanded) toggleMenu(false);
+                                if (isExpanded) {
+                                    isExpanded = false;
+                                    menuExpanded.setVisibility(View.GONE);
+                                }
                             }
 
-                            paramsWidget.x = initialX + dx;
-                            paramsWidget.y = initialY + dy;
-                            mWindowManager.updateViewLayout(mFloatingWidget, paramsWidget);
+                            paramsWidget.x = (int) (initialX + dx);
+                            paramsWidget.y = (int) (initialY + dy);
+                            if (mWindowManager != null) {
+                                mWindowManager.updateViewLayout(mFloatingWidget, paramsWidget);
+                            }
 
-                            // Cek apakah posisi bubble berada di area target 'X' bawah
                             checkRemoveTargetCollision(event.getRawX(), event.getRawY());
                         }
                         return true;
 
                     case MotionEvent.ACTION_UP:
                         mRemoveTargetView.setVisibility(View.GONE);
+                        long duration = System.currentTimeMillis() - touchStartTime;
+                        float totalDist = (float) Math.hypot(event.getRawX() - initialTouchX, event.getRawY() - initialTouchY);
 
                         if (isDragging) {
                             if (isOverRemoveTarget) {
-                                // USER MENJATUHKAN KE TARGET 'X' -> TUTUP/HAPUS WIDGET
                                 triggerHapticLong();
                                 Toast.makeText(FloatingVolumeService.this, "Widget volume dinonaktifkan", Toast.LENGTH_SHORT).show();
                                 stopSelf();
                                 return true;
                             } else {
-                                // Auto Snap ke sisi layar terdekat (kiri atau kanan)
                                 snapToEdge();
                             }
-                        } else {
-                            // SINGLE TAP: Munculkan Slider & Toggle Mini Menu
+                        } else if (duration < CLICK_MAX_DURATION && totalDist < CLICK_MAX_DISTANCE) {
+                            // SINGLE TAP: Buka/Tutup Menu Up/Down
                             triggerHaptic();
-                            if (audioManager != null) {
-                                audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_SAME, AudioManager.FLAG_SHOW_UI);
-                            }
                             toggleMenu(!isExpanded);
                         }
                         return true;
@@ -291,7 +318,7 @@ public class FloatingVolumeService extends Service {
     }
 
     private void checkRemoveTargetCollision(float rawX, float rawY) {
-        int targetYThreshold = screenHeight - 260;
+        int targetYThreshold = screenHeight - 280;
         int targetXCenter = screenWidth / 2;
         int targetXThreshold = 180;
 
@@ -310,11 +337,12 @@ public class FloatingVolumeService extends Service {
     }
 
     private void snapToEdge() {
+        if (isExpanded) return; // Jangan snap saat menu sedang terbuka
         int midX = screenWidth / 2;
-        int targetX = (paramsWidget.x >= midX) ? (screenWidth - bubbleWrapper.getWidth() - 20) : 20;
+        int targetX = (paramsWidget.x >= midX) ? (screenWidth - bubbleWrapper.getWidth() - 24) : 24;
 
         ValueAnimator animator = ValueAnimator.ofInt(paramsWidget.x, targetX);
-        animator.setDuration(220);
+        animator.setDuration(200);
         animator.addUpdateListener(animation -> {
             paramsWidget.x = (int) animation.getAnimatedValue();
             if (mFloatingWidget != null && mWindowManager != null) {

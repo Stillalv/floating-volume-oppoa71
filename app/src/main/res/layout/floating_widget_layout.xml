@@ -5,17 +5,17 @@
     android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:padding="6dp">
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    android:padding="4dp">
 
-    <!-- Tombol Lingkaran Utama (Bubble Lucide Volume) -->
+    <!-- Tombol Lingkaran Utama (Bubble Master) -->
     <FrameLayout
         android:id="@+id/bubble_wrapper"
         android:layout_width="54dp"
         android:layout_height="54dp"
         android:background="@drawable/bg_bubble_glass"
-        android:clickable="true"
-        android:focusable="true"
-        android:elevation="10dp">
+        android:elevation="12dp">
 
         <ImageView
             android:id="@+id/icon_main_bubble"
@@ -27,7 +27,7 @@
             android:contentDescription="Volume Bubble" />
     </FrameLayout>
 
-    <!-- Menu Expanded Melayang Pill Bar -->
+    <!-- Menu Melayang yang Muncul saat Bubble Ditekan (Up, Down, Level, Mute, Slider, X) -->
     <LinearLayout
         android:id="@+id/layout_expanded_menu"
         android:layout_width="wrap_content"
@@ -35,17 +35,59 @@
         android:layout_marginStart="8dp"
         android:background="@drawable/bg_expanded_bar"
         android:orientation="horizontal"
-        android:paddingStart="8dp"
-        android:paddingEnd="8dp"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
         android:gravity="center_vertical"
         android:visibility="gone"
-        android:elevation="10dp">
+        android:elevation="12dp">
+
+        <!-- Tombol Volume Turun (-) -->
+        <FrameLayout
+            android:id="@+id/btn_volume_down"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/bg_btn_action">
+            <ImageView
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_lucide_minus"
+                android:tint="#F8FAFC"
+                android:contentDescription="Volume Down" />
+        </FrameLayout>
+
+        <!-- Teks Persentase Volume (cth: 70%) -->
+        <TextView
+            android:id="@+id/tv_volume_level"
+            android:layout_width="46dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="70%"
+            android:textColor="#38BDF8"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <!-- Tombol Volume Naik (+) -->
+        <FrameLayout
+            android:id="@+id/btn_volume_up"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/bg_btn_action">
+            <ImageView
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_lucide_plus"
+                android:tint="#F8FAFC"
+                android:contentDescription="Volume Up" />
+        </FrameLayout>
 
         <!-- Tombol Mute / Unmute -->
         <FrameLayout
             android:id="@+id/btn_mute_toggle"
-            android:layout_width="38dp"
-            android:layout_height="38dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="4dp"
             android:background="@drawable/bg_btn_action">
             <ImageView
                 android:id="@+id/icon_mute"
@@ -57,55 +99,12 @@
                 android:contentDescription="Mute / Unmute" />
         </FrameLayout>
 
-        <!-- Tombol Volume - -->
-        <FrameLayout
-            android:id="@+id/btn_volume_down"
-            android:layout_width="38dp"
-            android:layout_height="38dp"
-            android:layout_marginStart="4dp"
-            android:background="@drawable/bg_btn_action">
-            <ImageView
-                android:layout_width="20dp"
-                android:layout_height="20dp"
-                android:layout_gravity="center"
-                android:src="@drawable/ic_lucide_minus"
-                android:tint="#F8FAFC"
-                android:contentDescription="Volume Down" />
-        </FrameLayout>
-
-        <!-- Level Volume Text (%) -->
-        <TextView
-            android:id="@+id/tv_volume_level"
-            android:layout_width="42dp"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:text="70%"
-            android:textColor="#38BDF8"
-            android:textSize="13sp"
-            android:textStyle="bold" />
-
-        <!-- Tombol Volume + -->
-        <FrameLayout
-            android:id="@+id/btn_volume_up"
-            android:layout_width="38dp"
-            android:layout_height="38dp"
-            android:layout_marginEnd="4dp"
-            android:background="@drawable/bg_btn_action">
-            <ImageView
-                android:layout_width="20dp"
-                android:layout_height="20dp"
-                android:layout_gravity="center"
-                android:src="@drawable/ic_lucide_plus"
-                android:tint="#F8FAFC"
-                android:contentDescription="Volume Up" />
-        </FrameLayout>
-
         <!-- Tombol Slider Bawaan OS -->
         <FrameLayout
             android:id="@+id/btn_show_slider"
-            android:layout_width="38dp"
-            android:layout_height="38dp"
-            android:layout_marginEnd="4dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="4dp"
             android:background="@drawable/bg_btn_action">
             <ImageView
                 android:layout_width="20dp"
@@ -116,11 +115,12 @@
                 android:contentDescription="Show Full Slider" />
         </FrameLayout>
 
-        <!-- Tombol Close Menu -->
+        <!-- Tombol Tutup Menu (X) -->
         <FrameLayout
             android:id="@+id/btn_close_menu"
-            android:layout_width="34dp"
-            android:layout_height="34dp"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="4dp"
             android:background="@drawable/bg_btn_action">
             <ImageView
                 android:layout_width="18dp"
