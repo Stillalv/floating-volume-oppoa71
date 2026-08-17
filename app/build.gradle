@@ -4,14 +4,14 @@ plugins {
 
 android {
     namespace 'com.volumefloat'
-    compileSdk 33
+    compileSdk 34
 
     defaultConfig {
         applicationId "com.volumefloat"
         minSdk 21
-        targetSdk 33
-        versionCode 4
-        versionName "1.1.2"
+        targetSdk 34
+        versionCode 5
+        versionName "1.2.0"
         vectorDrawables.useSupportLibrary = true
     }
 

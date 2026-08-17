@@ -17,8 +17,14 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDelegate;
+import androidx.appcompat.content.res.AppCompatResources;
 
 public class MainActivity extends AppCompatActivity {
+
+    static {
+        AppCompatDelegate.setCompatVectorFromResourcesEnabled(true);
+    }
 
     private static final int OVERLAY_PERMISSION_REQ_CODE = 2001;
 
@@ -75,12 +81,16 @@ public class MainActivity extends AppCompatActivity {
 
             Intent serviceIntent = new Intent(this, FloatingVolumeService.class);
             if (!FloatingVolumeService.isRunning) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    startForegroundService(serviceIntent);
-                } else {
-                    startService(serviceIntent);
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        startForegroundService(serviceIntent);
+                    } else {
+                        startService(serviceIntent);
+                    }
+                    Toast.makeText(this, "Widget aktif! Tekan bubble untuk atur volume", Toast.LENGTH_SHORT).show();
+                } catch (Exception e) {
+                    Toast.makeText(this, "Gagal memulai service: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                 }
-                Toast.makeText(this, "Widget aktif! Tekan bubble untuk atur volume", Toast.LENGTH_SHORT).show();
             } else {
                 stopService(serviceIntent);
                 Toast.makeText(this, "Widget dinonaktifkan", Toast.LENGTH_SHORT).show();
@@ -92,10 +102,12 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (fromUser && audioManager != null) {
-                    int max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
-                    int targetVol = (int) (((float) progress / 100) * max);
-                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, AudioManager.FLAG_SHOW_UI);
-                    tvTestVolumePercent.setText(progress + "%");
+                    try {
+                        int max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+                        int targetVol = (int) (((float) progress / 100) * max);
+                        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0);
+                        tvTestVolumePercent.setText(progress + "%");
+                    } catch (Exception ignored) {}
                 }
             }
 
@@ -110,22 +122,25 @@ public class MainActivity extends AppCompatActivity {
     private void setupVolumeSync() {
         updateCurrentVolumeSlider();
 
-        // Listen perubahan volume dari luar / tombol HP
-        volumeObserver = new VolumeObserver(new Handler(Looper.getMainLooper()));
-        getContentResolver().registerContentObserver(
-                Settings.System.CONTENT_URI,
-                true,
-                volumeObserver
-        );
+        try {
+            volumeObserver = new VolumeObserver(new Handler(Looper.getMainLooper()));
+            getContentResolver().registerContentObserver(
+                    Settings.System.CONTENT_URI,
+                    true,
+                    volumeObserver
+            );
+        } catch (Exception ignored) {}
     }
 
     private void updateCurrentVolumeSlider() {
         if (audioManager == null) return;
-        int max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
-        int current = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
-        int percent = (int) (((float) current / max) * 100);
-        seekbarTestVolume.setProgress(percent);
-        tvTestVolumePercent.setText(percent + "%");
+        try {
+            int max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+            int current = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
+            int percent = (int) (((float) current / Math.max(1, max)) * 100);
+            seekbarTestVolume.setProgress(percent);
+            tvTestVolumePercent.setText(percent + "%");
+        } catch (Exception ignored) {}
     }
 
     private class VolumeObserver extends ContentObserver {
@@ -157,24 +172,32 @@ public class MainActivity extends AppCompatActivity {
 
     private void requestOverlayPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            Toast.makeText(this, "Pilih 'Floating Volume' lalu aktifkan izinnya", Toast.LENGTH_LONG).show();
-            Intent intent = new Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:" + getPackageName())
-            );
-            startActivityForResult(intent, OVERLAY_PERMISSION_REQ_CODE);
+            try {
+                Toast.makeText(this, "Pilih 'Floating Volume' lalu aktifkan izinnya", Toast.LENGTH_LONG).show();
+                Intent intent = new Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:" + getPackageName())
+                );
+                startActivityForResult(intent, OVERLAY_PERMISSION_REQ_CODE);
+            } catch (Exception e) {
+                // Fallback jika direct package intent gagal di custom ROM
+                try {
+                    Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION);
+                    startActivityForResult(intent, OVERLAY_PERMISSION_REQ_CODE);
+                } catch (Exception ignored) {}
+            }
         }
     }
 
     private void updatePermissionUI() {
         boolean hasPermission = checkOverlayPermission();
         if (hasPermission) {
-            iconPermissionStatus.setImageResource(R.drawable.ic_lucide_shield_check);
+            iconPermissionStatus.setImageDrawable(AppCompatResources.getDrawable(this, R.drawable.ic_lucide_shield_check));
             badgePermissionStatus.setText("Sudah Aktif ✓");
             badgePermissionStatus.setTextColor(0xFF10B981); // Green
             btnGrantPermission.setVisibility(View.GONE);
         } else {
-            iconPermissionStatus.setImageResource(R.drawable.ic_lucide_shield_alert);
+            iconPermissionStatus.setImageDrawable(AppCompatResources.getDrawable(this, R.drawable.ic_lucide_shield_alert));
             badgePermissionStatus.setText("Belum Aktif");
             badgePermissionStatus.setTextColor(0xFFF59E0B); // Amber
             btnGrantPermission.setVisibility(View.VISIBLE);
@@ -201,7 +224,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         if (volumeObserver != null) {
-            getContentResolver().unregisterContentObserver(volumeObserver);
+            try {
+                getContentResolver().unregisterContentObserver(volumeObserver);
+            } catch (Exception ignored) {}
         }
     }
 }
