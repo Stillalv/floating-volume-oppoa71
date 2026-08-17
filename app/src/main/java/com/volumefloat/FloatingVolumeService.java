@@ -14,10 +14,12 @@ import android.os.IBinder;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.util.DisplayMetrics;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -50,6 +52,7 @@ public class FloatingVolumeService extends Service {
     private boolean isOverRemoveTarget = false;
     private int screenWidth = 0;
     private int screenHeight = 0;
+    private int touchSlop = 0;
 
     private static final String CHANNEL_ID = "FloatingVolumeChannel";
     private static final int NOTIFICATION_ID = 101;
@@ -68,6 +71,9 @@ public class FloatingVolumeService extends Service {
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
         mWindowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+
+        touchSlop = ViewConfiguration.get(this).getScaledTouchSlop();
+        if (touchSlop < 20) touchSlop = 30;
 
         calculateScreenDimensions();
 
@@ -91,6 +97,14 @@ public class FloatingVolumeService extends Service {
         screenHeight = metrics.heightPixels;
     }
 
+    private int dpToPx(int dp) {
+        return (int) TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP,
+                dp,
+                getResources().getDisplayMetrics()
+        );
+    }
+
     private int getOverlayWindowType() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             return WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
@@ -111,7 +125,7 @@ public class FloatingVolumeService extends Service {
         );
 
         paramsWidget.gravity = Gravity.TOP | Gravity.START;
-        paramsWidget.x = 24;
+        paramsWidget.x = dpToPx(16);
         paramsWidget.y = screenHeight / 3;
 
         mWindowManager.addView(mFloatingWidget, paramsWidget);
@@ -191,7 +205,7 @@ public class FloatingVolumeService extends Service {
         );
 
         paramsRemoveTarget.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        paramsRemoveTarget.y = 80;
+        paramsRemoveTarget.y = dpToPx(60);
 
         mRemoveTargetView.setVisibility(View.GONE);
         mWindowManager.addView(mRemoveTargetView, paramsRemoveTarget);
@@ -219,24 +233,26 @@ public class FloatingVolumeService extends Service {
             updateVolumeDisplay();
             menuExpanded.setVisibility(View.VISIBLE);
 
-            // Hitung lebar total agar tidak off-screen ke kanan
-            mFloatingWidget.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
-            int widgetWidth = mFloatingWidget.getMeasuredWidth();
-            if (widgetWidth == 0) widgetWidth = 600; // fallback approx px
+            // Perhitungan lebar eksplisit di DP agar tidak terpotong di Android 7 / ColorOS
+            int totalExpandedWidth = dpToPx(56 + 8 + 260); // bubble + margin + expanded bar
 
-            if (paramsWidget.x + widgetWidth > screenWidth - 24) {
-                paramsWidget.x = Math.max(24, screenWidth - widgetWidth - 24);
+            if (paramsWidget.x + totalExpandedWidth > screenWidth - dpToPx(16)) {
+                paramsWidget.x = Math.max(dpToPx(16), screenWidth - totalExpandedWidth - dpToPx(16));
             }
-            if (paramsWidget.x < 24) {
-                paramsWidget.x = 24;
+            if (paramsWidget.x < dpToPx(16)) {
+                paramsWidget.x = dpToPx(16);
             }
 
+            paramsWidget.width = WindowManager.LayoutParams.WRAP_CONTENT;
             if (mWindowManager != null && mFloatingWidget != null) {
+                mFloatingWidget.requestLayout();
                 mWindowManager.updateViewLayout(mFloatingWidget, paramsWidget);
             }
         } else {
             menuExpanded.setVisibility(View.GONE);
+            paramsWidget.width = WindowManager.LayoutParams.WRAP_CONTENT;
             if (mWindowManager != null && mFloatingWidget != null) {
+                mFloatingWidget.requestLayout();
                 mWindowManager.updateViewLayout(mFloatingWidget, paramsWidget);
             }
             snapToEdge();
@@ -251,8 +267,6 @@ public class FloatingVolumeService extends Service {
             private float initialTouchY;
             private long touchStartTime = 0;
             private boolean isDragging = false;
-            private static final int CLICK_MAX_DURATION = 350; // ms
-            private static final int CLICK_MAX_DISTANCE = 25; // px
 
             @Override
             public boolean onTouch(View v, MotionEvent event) {
@@ -268,10 +282,11 @@ public class FloatingVolumeService extends Service {
                         return true;
 
                     case MotionEvent.ACTION_MOVE:
-                        float dx = event.getRawX() - initialTouchX;
-                        float dy = event.getRawY() - initialTouchY;
+                        float deltaX = event.getRawX() - initialTouchX;
+                        float deltaY = event.getRawY() - initialTouchY;
+                        double distance = Math.hypot(deltaX, deltaY);
 
-                        if (Math.abs(dx) > CLICK_MAX_DISTANCE || Math.abs(dy) > CLICK_MAX_DISTANCE) {
+                        if (distance > touchSlop * 1.5) {
                             if (!isDragging) {
                                 isDragging = true;
                                 mRemoveTargetView.setVisibility(View.VISIBLE);
@@ -281,8 +296,8 @@ public class FloatingVolumeService extends Service {
                                 }
                             }
 
-                            paramsWidget.x = (int) (initialX + dx);
-                            paramsWidget.y = (int) (initialY + dy);
+                            paramsWidget.x = (int) (initialX + deltaX);
+                            paramsWidget.y = (int) (initialY + deltaY);
                             if (mWindowManager != null) {
                                 mWindowManager.updateViewLayout(mFloatingWidget, paramsWidget);
                             }
@@ -293,8 +308,8 @@ public class FloatingVolumeService extends Service {
 
                     case MotionEvent.ACTION_UP:
                         mRemoveTargetView.setVisibility(View.GONE);
-                        long duration = System.currentTimeMillis() - touchStartTime;
-                        float totalDist = (float) Math.hypot(event.getRawX() - initialTouchX, event.getRawY() - initialTouchY);
+                        long pressDuration = System.currentTimeMillis() - touchStartTime;
+                        double totalMovement = Math.hypot(event.getRawX() - initialTouchX, event.getRawY() - initialTouchY);
 
                         if (isDragging) {
                             if (isOverRemoveTarget) {
@@ -305,10 +320,12 @@ public class FloatingVolumeService extends Service {
                             } else {
                                 snapToEdge();
                             }
-                        } else if (duration < CLICK_MAX_DURATION && totalDist < CLICK_MAX_DISTANCE) {
-                            // SINGLE TAP: Buka/Tutup Menu Up/Down
-                            triggerHaptic();
-                            toggleMenu(!isExpanded);
+                        } else {
+                            // JIKA GERAKAN KECIL ATAU TEKAN SINGKAT -> PASTI SINGLE TAP!
+                            if (pressDuration < 500 || totalMovement <= touchSlop * 2) {
+                                triggerHaptic();
+                                toggleMenu(!isExpanded);
+                            }
                         }
                         return true;
                 }
@@ -318,9 +335,9 @@ public class FloatingVolumeService extends Service {
     }
 
     private void checkRemoveTargetCollision(float rawX, float rawY) {
-        int targetYThreshold = screenHeight - 280;
+        int targetYThreshold = screenHeight - dpToPx(150);
         int targetXCenter = screenWidth / 2;
-        int targetXThreshold = 180;
+        int targetXThreshold = dpToPx(80);
 
         if (rawY > targetYThreshold && Math.abs(rawX - targetXCenter) < targetXThreshold) {
             if (!isOverRemoveTarget) {
@@ -339,10 +356,10 @@ public class FloatingVolumeService extends Service {
     private void snapToEdge() {
         if (isExpanded) return; // Jangan snap saat menu sedang terbuka
         int midX = screenWidth / 2;
-        int targetX = (paramsWidget.x >= midX) ? (screenWidth - bubbleWrapper.getWidth() - 24) : 24;
+        int targetX = (paramsWidget.x >= midX) ? (screenWidth - dpToPx(56 + 16)) : dpToPx(16);
 
         ValueAnimator animator = ValueAnimator.ofInt(paramsWidget.x, targetX);
-        animator.setDuration(200);
+        animator.setDuration(180);
         animator.addUpdateListener(animation -> {
             paramsWidget.x = (int) animation.getAnimatedValue();
             if (mFloatingWidget != null && mWindowManager != null) {
@@ -355,18 +372,18 @@ public class FloatingVolumeService extends Service {
     private void triggerHaptic() {
         if (vibrator == null) return;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            vibrator.vibrate(VibrationEffect.createOneShot(25, VibrationEffect.DEFAULT_AMPLITUDE));
+            vibrator.vibrate(VibrationEffect.createOneShot(30, VibrationEffect.DEFAULT_AMPLITUDE));
         } else {
-            vibrator.vibrate(25);
+            vibrator.vibrate(30);
         }
     }
 
     private void triggerHapticLong() {
         if (vibrator == null) return;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            vibrator.vibrate(VibrationEffect.createOneShot(70, VibrationEffect.DEFAULT_AMPLITUDE));
+            vibrator.vibrate(VibrationEffect.createOneShot(80, VibrationEffect.DEFAULT_AMPLITUDE));
         } else {
-            vibrator.vibrate(70);
+            vibrator.vibrate(80);
         }
     }
 
