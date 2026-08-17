@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root_container"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:padding="4dp">
+
+    <!-- Tombol Lingkaran Utama (Bubble) -->
+    <FrameLayout
+        android:id="@+id/bubble_wrapper"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:background="@drawable/bg_floating_bubble"
+        android:elevation="8dp">
+
+        <ImageView
+            android:id="@+id/icon_main_bubble"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="center"
+            android:src="@android:drawable/ic_lock_silent_mode_off"
+            android:contentDescription="Volume Bubble" />
+    </FrameLayout>
+
+    <!-- Menu Melayang yang bisa di-expand jika ditekan -->
+    <LinearLayout
+        android:id="@+id/layout_expanded_menu"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/bg_floating_menu"
+        android:orientation="horizontal"
+        android:padding="6dp"
+        android:gravity="center"
+        android:visibility="gone"
+        android:elevation="8dp">
+
+        <!-- Tombol Volume + -->
+        <ImageView
+            android:id="@+id/btn_volume_up"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:padding="8dp"
+            android:src="@android:drawable/arrow_up_float"
+            android:contentDescription="Volume Up" />
+
+        <!-- Tombol Volume - -->
+        <ImageView
+            android:id="@+id/btn_volume_down"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:padding="8dp"
+            android:src="@android:drawable/arrow_down_float"
+            android:contentDescription="Volume Down" />
+
+        <!-- Tombol Slider Bawaan -->
+        <ImageView
+            android:id="@+id/btn_show_slider"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:padding="8dp"
+            android:src="@android:drawable/ic_menu_sort_by_size"
+            android:contentDescription="Show Full Slider" />
+
+        <!-- Tombol Tutup Mini Menu -->
+        <ImageView
+            android:id="@+id/btn_close_menu"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:padding="8dp"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:contentDescription="Close Menu" />
+    </LinearLayout>
+
+</LinearLayout>
